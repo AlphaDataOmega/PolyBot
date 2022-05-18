@@ -17,39 +17,28 @@ interface IDODO {
 
 
 contract Arbitrage {
-    IUniswapV2Router02 public immutable sRouter;
-    IUniswapV2Router02 public immutable uRouter;
+    IUniswapV2Router02 public immutable aRouter;
+    IUniswapV2Router02 public immutable pRouter;
 
     address public owner;
 
-    constructor(address _sRouter, address _uRouter) {
-        sRouter = IUniswapV2Router02(_sRouter); // Sushiswap
-        uRouter = IUniswapV2Router02(_uRouter); // Uniswap
+    constructor(address _aRouter, address _pRouter) {
+        aRouter = IUniswapV2Router02(_aRouter); // Apeswap
+        pRouter = IUniswapV2Router02(_pRouter); // Pancakeswap
         owner = msg.sender;
     }
-
-    // It's easy to get lost so here is the basic route of the FlashLoan
-    // dodoFlashLoan() => IDODO._BASE_TOKEN_() => DDPFlashLoanCall() => _FlashLoanCallBack()
 
     function dodoFlashLoan(
     address flashLoanPool, //You will make a flashloan from this DODOV2 pool
     address loanToken,
     uint256 loanAmount,
-    
-    // These are extra parameters we want to send through the dodoFlashLoan() function. 
-    // These will be passed back from IDODO _BASE_TOKEN_() function to 
-    // the correct ***FlashLoanCall() function based on the pool address provided.
-
     bool startOnUniswap,
     address token1,
     uint256 balanceBefore 
 
     ) internal  {
-
-        // Custom Structured Data
+        //Note: The data can be structured with any variables required by your logic. The following code is just an example
         bytes memory data = abi.encode(flashLoanPool, loanToken, loanAmount, startOnUniswap, token1, balanceBefore);
-
-        //DODO 
         address flashLoanBase = IDODO(flashLoanPool)._BASE_TOKEN_();
         if(flashLoanBase == loanToken) {
             IDODO(flashLoanPool).flashLoan(loanAmount, 0, address(this), data);
@@ -65,23 +54,20 @@ contract Arbitrage {
         address _token1,
         uint256 _flashAmount
     ) external {
-        //Set Extra Variables for Custom Data
+        
         uint256 balanceBefore = IERC20(_token0).balanceOf(address(this));
 
-        //Call FlashLoan with required and extra parameters. That have been sent by executeTrade() parameters.
-        // On execution the dodoFlashLoan should trigger callback function based on the Factory Contract
-        // that contains the pool specified by _flashLoanPool
-        dodoFlashLoan(_flashLoanPool, _token0, _flashAmount, _startOnUniswap, _token1, balanceBefore); 
+        dodoFlashLoan(_flashLoanPool, _token0, _flashAmount, _startOnUniswap, _token1, balanceBefore); // execution should trigger callback function
     }
 
-    //  function DVMFlashLoanCall(
-    //     address sender, 
-    //     uint256 baseAmount, 
-    //     uint256 quoteAmount,
-    //     bytes calldata data
-    //     ) external {
-    //     _flashLoanCallBack(sender, baseAmount, quoteAmount, data);
-    // }
+     function DVMFlashLoanCall(
+        address sender, 
+        uint256 baseAmount, 
+        uint256 quoteAmount,
+        bytes calldata data
+        ) external {
+        _flashLoanCallBack(sender,baseAmount,quoteAmount,data);
+    }
 
     //Note: CallBack function executed by DODOV2(DPP) flashLoan pool
     function DPPFlashLoanCall(
@@ -90,18 +76,18 @@ contract Arbitrage {
         uint256 quoteAmount,
         bytes calldata data
            ) external {
-        _flashLoanCallBack(sender, baseAmount, quoteAmount, data);
+        _flashLoanCallBack(sender,baseAmount,quoteAmount,data);
     }
 
-    // //Note: CallBack function executed by DODOV2(DSP) flashLoan pool
-    // function DSPFlashLoanCall(
-    //     address sender, 
-    //     uint256 baseAmount, 
-    //     uint256 quoteAmount,
-    //     bytes calldata data
-    //      ) external {
-    //     _flashLoanCallBack(sender,baseAmount,quoteAmount,data);
-    // }
+    //Note: CallBack function executed by DODOV2(DSP) flashLoan pool
+    function DSPFlashLoanCall(
+        address sender, 
+        uint256 baseAmount, 
+        uint256 quoteAmount,
+        bytes calldata data
+         ) external {
+        _flashLoanCallBack(sender,baseAmount,quoteAmount,data);
+    }
 
 
     function _flashLoanCallBack(
@@ -119,20 +105,12 @@ contract Arbitrage {
             uint256 balanceBefore
         ) = abi.decode(data, (address, address, uint256, bool, address, uint256));
 
-        //Added
         uint256 balanceAfter = IERC20(token0).balanceOf(address(this));
 
-        require(
-            sender == address(this) && msg.sender == flashLoanPool, 
-            "HANDLE_FLASH_DENIED"
-        );
-
-        // Make sure that there is enough tokens in 
-        // the msg.senderaccount.
+        require(sender == address(this) && msg.sender == flashLoanPool, "HANDLE_FLASH_DENIED");
         require(balanceAfter - balanceBefore == flashAmount, "contract did not get the loan");
 
-        // Set an in-memory array variable called path that 
-        // will hold two addresses in an Array.
+        // Use the money here!
         address[] memory path = new address[](2);
 
         path[0] = token0;
@@ -162,10 +140,7 @@ contract Arbitrage {
             );
         }
 
-        // Withdraw Profit
         IERC20(token0).transfer(owner, IERC20(token0).balanceOf(address(this)) - (flashAmount + 1));
-        
-        // Payback Flashloan
         IERC20(token0).transfer(flashLoanPool, flashAmount);
     }
 
@@ -176,21 +151,12 @@ contract Arbitrage {
         uint256 _amountIn,
         uint256 _amountOut
     ) internal {
-
-        // Here is where we could hard code a router address,
-        // It would look something like this...
-
-        // IUniswapV2Router02 public uRouter;
-        // uRouter = IUniswapV2Router02(_uRouter); 
-
         require(
-            // Get Approval For Swap
-            IERC20(_path[0]).approve(address(uRouter), _amountIn),
-            "Uniswap approval failed."
+            IERC20(_path[0]).approve(address(pRouter), _amountIn),
+            "Pancakeswap approval failed."
         );
 
-        //Perform the Swap
-        uRouter.swapExactTokensForTokens(
+        pRouter.swapExactTokensForTokens(
             _amountIn,
             _amountOut,
             _path,
@@ -204,20 +170,12 @@ contract Arbitrage {
         uint256 _amountIn,
         uint256 _amountOut
     ) internal {
-
-        // Here is where we could hard code a router address,
-        // It would look something like this...
-
-        // IUniswapV2Router02 public sRouter;
-        // sRouter = IUniswapV2Router02(_sRouter); 
-
         require(
-            //Get Approval for Swap
-            IERC20(_path[0]).approve(address(sRouter), _amountIn),
-            "Sushiswap approval failed."
+            IERC20(_path[0]).approve(address(aRouter), _amountIn),
+            "Apeswap approval failed."
         );
 
-        sRouter.swapExactTokensForTokens(
+        aRouter.swapExactTokensForTokens(
             _amountIn,
             _amountOut,
             _path,
@@ -225,4 +183,4 @@ contract Arbitrage {
             (block.timestamp + 1200)
         );
     }
-} // END of Contract Arbitrage
+}

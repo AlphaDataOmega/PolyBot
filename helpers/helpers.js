@@ -22,20 +22,39 @@ async function getTokenAndContract(_token0Address, _token1Address) {
     const token0 = new Token(
         ChainId.MAINNET,
         _token0Address,
-        18,
+        await token0Contract.methods.decimals().call(),
         await token0Contract.methods.symbol().call(),
-        await token0Contract.methods.name().call()
+        await token0Contract.methods.name().call(),
     )
 
     const token1 = new Token(
         ChainId.MAINNET,
         _token1Address,
-        18,
+        await token1Contract.methods.decimals().call(),
         await token1Contract.methods.symbol().call(),
-        await token1Contract.methods.name().call()
+        await token1Contract.methods.name().call(),
     )
 
     return { token0Contract, token1Contract, token0, token1 }
+}
+
+//Here we are going to make sure that there is a pool with the tokens that we are using within the flashloan provider's pool factory.
+async function getFlashLoanPool(_flashLoan, _token0Address, _token1Address ) {
+
+    //First, we will let the user know what is going on. So we will log out a message to the console.
+    console.log(' Checking FlashLoan Provider for a Pool to Borrow from..' )
+
+    //Here we will call to the flashloan contract using the methods keyword which will envoke the getDODOPool function that 
+    //requires the stable token address and the volatile token address.
+    //Then we will send the call using the call() function.
+    const flashLoanPool = await _flashLoan.methods.getDODOPool(_token0Address, _token1Address ).call()
+    
+    if (!flashLoanPool) {
+        console.log('There is no pool available to borrow from... Choose a different pair...')
+        return false
+    }
+
+    return flashLoanPool 
 }
 
 async function getPairAddress(_V2Factory, _token0, _token1) {
@@ -49,13 +68,15 @@ async function getPairContract(_V2Factory, _token0, _token1) {
     return pairContract
 }
 
-async function getReserves(_pairContract) {
+async function getReserves(_pairContract, _token0, _token1) {
     const reserves = await _pairContract.methods.getReserves().call()
+    // reserves.reserve0 = reserves.reserve0 /= Math.pow(10, _token0.decimals)
+    // reserves.reserve1 = reserves.reserve1 /= Math.pow(10, _token1.decimals)
     return [reserves.reserve0, reserves.reserve1]
 }
 
-async function calculatePrice(_pairContract) {
-    const [reserve0, reserve1] = await getReserves(_pairContract)
+async function calculatePrice(_pairContract, _token0, _token1) {
+    const [reserve0, reserve1] = await getReserves(_pairContract, _token0, _token1)
     return Big(reserve0).div(Big(reserve1)).toString()
 }
 
@@ -67,8 +88,8 @@ async function getEstimatedReturn(amount, _routerPath, _token0, _token1) {
     const trade1 = await _routerPath[0].methods.getAmountsOut(amount, [_token0.address, _token1.address]).call()
     const trade2 = await _routerPath[1].methods.getAmountsOut(trade1[1], [_token1.address, _token0.address]).call()
 
-    const amountIn = Number(web3.utils.fromWei(trade1[0], 'ether'))
-    const amountOut = Number(web3.utils.fromWei(trade2[1], 'ether'))
+    const amountIn = trade1[0] //Number(web3.utils.fromWei(trade1[0], 'ether'))
+    const amountOut = trade2[1] //Number(web3.utils.fromWei(trade2[1], 'ether'))
 
     return { amountIn, amountOut }
 }
@@ -77,6 +98,7 @@ module.exports = {
     getTokenAndContract,
     getPairAddress,
     getPairContract,
+    getFlashLoanPool,
     getReserves,
     calculatePrice,
     calculateDifference,
