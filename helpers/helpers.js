@@ -70,13 +70,18 @@ async function getPairContract(_V2Factory, _token0, _token1) {
 
 async function getReserves(_pairContract, _token0, _token1) {
     const reserves = await _pairContract.methods.getReserves().call()
-    // reserves.reserve0 = reserves.reserve0 /= Math.pow(10, _token0.decimals)
-    // reserves.reserve1 = reserves.reserve1 /= Math.pow(10, _token1.decimals)
-    return [reserves.reserve0, reserves.reserve1]
+    reservesToken0 = await _pairContract.methods.token0().call()
+    if (reservesToken0 === _token0.address) {
+        return [reserves.reserve0, reserves.reserve1]
+    } else {
+        return [reserves.reserve1, reserves.reserve0]
+    }
 }
 
 async function calculatePrice(_pairContract, _token0, _token1) {
-    const [reserve0, reserve1] = await getReserves(_pairContract, _token0, _token1)
+    let [reserve0, reserve1] = await getReserves(_pairContract, _token0, _token1)
+    reserve0 = reserve0 / Math.pow(10, _token0.decimals)
+    reserve1 = reserve1 / Math.pow(10, _token1.decimals)
     return Big(reserve0).div(Big(reserve1)).toString()
 }
 
@@ -85,8 +90,14 @@ function calculateDifference(uPrice, sPrice) {
 }
 
 async function getEstimatedReturn(amount, _routerPath, _token0, _token1) {
+
     const trade1 = await _routerPath[0].methods.getAmountsOut(amount, [_token0.address, _token1.address]).call()
+
+    console.log(`trade1: ${trade1}`)
+
     const trade2 = await _routerPath[1].methods.getAmountsOut(trade1[1], [_token1.address, _token0.address]).call()
+
+    console.log(`trade2: ${trade2}`)
 
     const amountIn = trade1[0] //Number(web3.utils.fromWei(trade1[0], 'ether'))
     const amountOut = trade2[1] //Number(web3.utils.fromWei(trade2[1], 'ether'))

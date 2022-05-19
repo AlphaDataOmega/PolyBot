@@ -24,7 +24,7 @@ const uRouter = new web3.eth.Contract(IUniswapV2Router02.abi, config.UNISWAP.V2_
 const sFactory = new web3.eth.Contract(IUniswapV2Factory.abi, config.SUSHISWAP.FACTORY_ADDRESS) // SUSHISWAP FACTORY CONTRACT
 const sRouter = new web3.eth.Contract(IUniswapV2Router02.abi, config.SUSHISWAP.V2_ROUTER_02_ADDRESS) // SUSHISWAP ROUTER CONTRACT
 
-const IArbitrage = require("../build/contracts/Arbitrage.json");
+const IArbitrage = require( "../build/contracts/Arbitrage.json");
 const arbitrage = new web3.eth.Contract(IArbitrage.abi, "0x885029fFF91541438a3f405538161F75912270a7");
 
 module.exports = {

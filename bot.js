@@ -105,8 +105,8 @@ const checkPrice = async (exchange, token0, token1) => {
 
     const currentBlock = await web3.eth.getBlockNumber()
 
-    const uPrice = await calculatePrice(uPair)
-    const sPrice = await calculatePrice(sPair)
+    const uPrice = await calculatePrice(uPair, token0, token1)
+    const sPrice = await calculatePrice(sPair, token0, token1)
 
     const uFPrice = Number(uPrice).toFixed(units)
     const sFPrice = Number(sPrice).toFixed(units)
@@ -152,27 +152,23 @@ const determineProfitability = async (_routerPath, _token0Contract, _token0, _to
     // This is where you can customize your conditions on whether a profitable trade is possible.
     // This is a basic example of trading WETH/SHIB...
 
-    let reserves, exchangeToBuy, exchangeToSell
+    let reserves, exchangeToBuy, exchangeToSell, reservesExchange
 
     if (_routerPath[0]._address == uRouter._address) {
-        reserves = await getReserves(sPair)
+        reserves = await getReserves(sPair, _token0, _token1)
         exchangeToBuy = 'Uniswap'
         exchangeToSell = 'Sushiswap'
+        reservesExchange = 'Sushiswap'
     } else {
-        reserves = await getReserves(uPair)
+        reserves = await getReserves(uPair, _token0, _token1)
         exchangeToBuy = 'Sushiswap'
         exchangeToSell = 'Uniswap'
+        reservesExchange = 'Uniswap'
     }
 
-    console.log(`Reserves on ${_routerPath[1]._address}`)
-    console.log(`${_token0.name}: ${reserves[0]}`)
-    console.log(`${_token1.name}: ${reserves[1]}\n`)
-    
-    console.log(`Token 0 Reserves 0 Decimals ${_token0.decimals}: ${reserves[0] /= Math.pow(10, _token0.decimals).toFixed(0)}`)
-    console.log(`Token 1 Reserves 1 Decimals ${_token1.decimals}: ${reserves[1] /= Math.pow(10, _token1.decimals).toFixed(0)}\n`) //${Number(web3.utils.fromWei(reserves[1].toString(), 'ether'))}\n`)
-
-    console.log(`Token 1 Reserves 0 Decimals ${_token1.decimals}: ${reserves[0] /= Math.pow(10, _token1.decimals).toFixed(0)}`)
-    console.log(`Token 0 Reserves 1 Decimals ${_token0.decimals}: ${reserves[1] /= Math.pow(10, _token0.decimals).toFixed(0)}\n`)
+    console.log(`Reserves on ${reservesExchange} : ${_routerPath[1]._address}`)
+    console.log(`${_token0.symbol}: ${reserves[0] / Math.pow(10, _token0.decimals).toFixed(2)}`)
+    console.log(`${_token1.symbol}: ${reserves[1] / Math.pow(10, _token1.decimals).toFixed(2)}\n`)
     
     //try {
 
@@ -181,29 +177,28 @@ const determineProfitability = async (_routerPath, _token0Contract, _token0, _to
     // try {
     //     let result = await _routerPath[0].methods.getAmountsIn(reserves[0], [_token0.address, _token1.address]).call()
     // } catch(error) {
-        //reserves[0] = reserves[0] /= Math.pow(10, _token0.decimals).toFixed(0)
+        //reserves[0] = reserves[0] / Math.pow(10, _token0.decimals).toFixed(0)
 
-        //console.log(reserves[0])
+        console.log(reserves[0])
 
         let result = await _routerPath[0].methods.getAmountsIn(reserves[0], [_token0.address, _token1.address]).call()
     // }
 
-        //console.log(result)
+        console.log(result)
 
+        const token0In = result[0] * 100 // Math.pow(10, _token0.decimals).toFixed(0) // WETH
+        const token1In = result[1] // / Math.pow(10, _token1.decimals).toFixed(0) // SHIB
 
-        const token0In = result[0] // WETH
-        const token1In = result[1] // SHIB
-
-        //console.log(`token1In: ${token1In}`)
 
         result = await _routerPath[1].methods.getAmountsOut(token1In, [_token1.address, _token0.address]).call()
 
-        //console.log(result)
-
+        
         console.log(`Estimated amount of ${_token0.symbol} needed to buy enough ${_token1.symbol} on ${exchangeToBuy}\t| ${token0In}`)
         console.log(`Estimated amount of ${_token0.symbol} returned after swapping ${_token1.symbol} on ${exchangeToSell}\t| ${result[1]} \n`)
 
         const { amountIn, amountOut } = await getEstimatedReturn(token0In, _routerPath, _token0, _token1)
+
+        
 
         let ethBalanceBefore = await web3.eth.getBalance(account)
         ethBalanceBefore = web3.utils.fromWei(ethBalanceBefore, 'ether')
